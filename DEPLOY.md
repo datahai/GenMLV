@@ -32,6 +32,7 @@ SELECT
 FROM Product
 ```
 
+- Upload the .sql file to the mvl/01 directory
 <img width="503" height="395" alt="image" src="https://github.com/user-attachments/assets/3e467ada-8406-4b1f-b5fc-c36ab73f35d7" />
 
 
