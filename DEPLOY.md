@@ -35,5 +35,7 @@ FROM Product
 - Upload the .sql file to the mvl/01 directory
 <img width="503" height="395" alt="image" src="https://github.com/user-attachments/assets/3e467ada-8406-4b1f-b5fc-c36ab73f35d7" />
 
+- You can now run the Notebook cell with the genmlv logic in.
+
 
 
