@@ -19,9 +19,9 @@ If it exists:
 📄 3. Discover .sql Files
 - Traverse all subdirectories under sql_root_path.
 - For each .sql file found:
--- Record its full path.
--- Get its last modified timestamp.
--- Store this info in a dictionary sql_files keyed by the table name (filename without .sql).
+ - Record its full path.
+ - Get its last modified timestamp.
+ - Store this info in a dictionary sql_files keyed by the table name (filename without .sql).
 
 📋 4. Get Existing Materialized Lake Views (MLVs)
 Use Spark SQL to list all existing MLVs.
