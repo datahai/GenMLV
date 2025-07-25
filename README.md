@@ -21,7 +21,6 @@ If the metadata file doesn't exist:
 
 If it exists:
 - Try to load the JSON content.
-- If the file is empty or corrupted, initialize an empty metadata dictionary and print a warning.
   
 📄 3. Discover .sql Files
 - Traverse all subdirectories under sql_root_path.
