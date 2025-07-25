@@ -2,7 +2,7 @@
 Project to manage MLVs in Microsoft Fabric Lakehouse
 
 - Keeps your Fabric Lakehouse MVLs in sync with .sql files in a Lakehouse Files directory.
-- Automatically creates or updates Materialized Lake Views based on the .sql files files.
+- Automatically creates or updates Materialized Lake Views based on the .sql files.
 - Cleans up any MLVs that no longer have a corresponding .sql file.
 - Maintains a metadata file to track changes and avoid unnecessary recreation.
 
