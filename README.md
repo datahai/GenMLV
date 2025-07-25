@@ -45,6 +45,7 @@ If it exists:
         - Read the SQL SELECT statement from the file.
         - Drop the existing MLV (if it exists).
         - Create a new MLV using CREATE MATERIALIZED LAKE VIEW.
+        - Schemas will be created automatically based on file names
         - Update the metadata with the new timestamp.
         
 💾 7. Save Updated Metadata
