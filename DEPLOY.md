@@ -5,3 +5,8 @@ To deploy and use GenMLV:
 - Create a Lakehouse with schema enabled (preview only)
 - In the Lakehouse Files section, create a folder called mlv
 - In this mlv folder you can create sub-folders e.g. 01, 02, 03 etc.  This is because we can add .sql files to directories to run in sequence.  E.G any .sql files in 01 need tobe run before files in 02 folder etc.
+
+To write the SQL transformations:
+- Create a file with the name of the MLV you want to create e.g. "mlv_silver_product"
+<img width="503" height="395" alt="image" src="https://github.com/user-attachments/assets/3e467ada-8406-4b1f-b5fc-c36ab73f35d7" />
+
