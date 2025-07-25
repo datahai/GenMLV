@@ -3,9 +3,8 @@ Project to manage MLVs in Microsoft Fabric Lakehouse
 
 🔧 1. Setup and Initialization
 
-sql_root_path: Root directory containing subfolders with .sql files.
-
-metadata_file_path: Path to a JSON file that stores metadata about the .sql files (e.g., last modified time).
+-sql_root_path: Root directory containing subfolders with .sql files.
+-metadata_file_path: Path to a JSON file that stores metadata about the .sql files (e.g., last modified time).
 
 📁 2. Load or Initialize Metadata
 
@@ -18,11 +17,12 @@ If it exists:
 - If the file is empty or corrupted, initialize an empty metadata dictionary and print a warning.
   
 📄 3. Discover .sql Files
-Traverse all subdirectories under sql_root_path.
-For each .sql file found:
-Record its full path.
-Get its last modified timestamp.
-Store this info in a dictionary sql_files keyed by the table name (filename without .sql).
+-Traverse all subdirectories under sql_root_path.
+-For each .sql file found:
+--Record its full path.
+--Get its last modified timestamp.
+--Store this info in a dictionary sql_files keyed by the table name (filename without .sql).
+
 📋 4. Get Existing Materialized Lake Views (MLVs)
 Use Spark SQL to list all existing MLVs.
 Store their names in a set called existing_mlvs.
