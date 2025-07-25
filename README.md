@@ -38,7 +38,7 @@ If it exists:
 - Remove their entries from the metadata.
   
 🔄 6. Create or Recreate MLVs
--For each .sql file:
+- For each .sql file:
     - Compare its last modified time with the timestamp in the metadata.
     - If the file is newer:
         - Read the SQL SELECT statement from the file.
