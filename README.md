@@ -24,26 +24,22 @@ If it exists:
     - Store this info in a dictionary sql_files keyed by the table name (filename without .sql).
 
 📋 4. Get Existing Materialized Lake Views (MLVs)
-Use Spark SQL to list all existing MLVs.
-Store their names in a set called existing_mlvs.
+- Use Spark SQL to list all existing MLVs.
+- Store their names in a set called existing_mlvs.
+  
 🧹 5. Drop Obsolete MLVs
-Identify MLVs that exist in Spark but no longer have a corresponding .sql file.
-Drop each of these MLVs using DROP MATERIALIZED LAKE VIEW.
-Remove their entries from the metadata.
+- Identify MLVs that exist in Spark but no longer have a corresponding .sql file.
+- Drop each of these MLVs using DROP MATERIALIZED LAKE VIEW.
+- Remove their entries from the metadata.
+  
 🔄 6. Create or Recreate MLVs
-For each .sql file:
-Compare its last modified time with the timestamp in the metadata.
-If the file is newer:
-Read the SQL SELECT statement from the file.
-Drop the existing MLV (if it exists).
-Create a new MLV using CREATE MATERIALIZED LAKE VIEW.
-Update the metadata with the new timestamp.
+-For each .sql file:
+    - Compare its last modified time with the timestamp in the metadata.
+    - If the file is newer:
+        - Read the SQL SELECT statement from the file.
+        - Drop the existing MLV (if it exists).
+        - Create a new MLV using CREATE MATERIALIZED LAKE VIEW.
+        - Update the metadata with the new timestamp.
+        
 💾 7. Save Updated Metadata
-Write the updated metadata dictionary back to the JSON file.
-✅ Summary of What It Does
-This script:
-
-Keeps your Spark environment in sync with .sql files in a directory.
-Automatically creates or updates Materialized Lake Views based on those files.
-Cleans up any MLVs that no longer have a corresponding .sql file.
-Maintains a metadata file to track changes and avoid unnecessary recreation.
+- Write the updated metadata dictionary back to the JSON file.
