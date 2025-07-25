@@ -1,6 +1,11 @@
 # GenMLV
 Project to manage MLVs in Microsoft Fabric Lakehouse
 
+- Keeps your Lakehouse MVLs in sync with .sql files in a directory.
+- Automatically creates or updates Materialized Lake Views based on those files.
+- Cleans up any MLVs that no longer have a corresponding .sql file.
+- Maintains a metadata file to track changes and avoid unnecessary recreation.
+
 🔧 1. Setup and Initialization
 
 -sql_root_path: Root directory containing subfolders with .sql files.
