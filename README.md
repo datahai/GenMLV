@@ -2,6 +2,7 @@
 Project to manage MLVs in Microsoft Fabric Lakehouse
 
 🔧 1. Setup and Initialization
+
 Spark Session is initialized using SparkSession.builder.getOrCreate().
 Paths are defined:
 sql_root_path: Root directory containing subfolders with .sql files.
