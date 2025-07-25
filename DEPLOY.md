@@ -10,14 +10,14 @@ To write the SQL transformations:
 - Create a file with the name of the MLV you want to create e.g. "mlv_silver_product"
 - In this file, add the SQL transformation required to create the MLV.  You must omit the CREATE MATERIALIZED LAKE VIEW as this is handled in the process.  The format of the file must be:
 
-'''[( 
+```[( 
     CONSTRAINT constraint_name1 CHECK (condition expression1)[ON MISMATCH DROP | FAIL],  
     CONSTRAINT constraint_name2 CHECK (condition expression2)[ON MISMATCH DROP | FAIL] 
 )] 
 [PARTITIONED BY (col1, col2, ... )] 
 [COMMENT “description or comment”] 
 [TBLPROPERTIES (“key1”=”val1”, “key2”=”val2”, ... )] 
-AS select_statement '''
+AS select_statement ```
 
 
 <img width="503" height="395" alt="image" src="https://github.com/user-attachments/assets/3e467ada-8406-4b1f-b5fc-c36ab73f35d7" />
