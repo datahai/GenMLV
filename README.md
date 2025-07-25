@@ -4,14 +4,19 @@ Project to manage MLVs in Microsoft Fabric Lakehouse
 🔧 1. Setup and Initialization
 
 sql_root_path: Root directory containing subfolders with .sql files.
+
 metadata_file_path: Path to a JSON file that stores metadata about the .sql files (e.g., last modified time).
+
 📁 2. Load or Initialize Metadata
+
 If the metadata file doesn't exist:
-Create the directory (if needed).
-Create an empty JSON file to store metadata.
+- Create the directory (if needed).
+- Create an empty JSON file to store metadata.
+
 If it exists:
-Try to load the JSON content.
-If the file is empty or corrupted, initialize an empty metadata dictionary and print a warning.
+- Try to load the JSON content.
+- If the file is empty or corrupted, initialize an empty metadata dictionary and print a warning.
+  
 📄 3. Discover .sql Files
 Traverse all subdirectories under sql_root_path.
 For each .sql file found:
