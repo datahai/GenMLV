@@ -6,6 +6,8 @@ Project to manage MLVs in Microsoft Fabric Lakehouse
 - Cleans up any MLVs that no longer have a corresponding .sql file.
 - Maintains a metadata file to track changes and avoid unnecessary recreation.
 
+---
+
 🔧 1. Setup and Initialization
 
 - sql_root_path: Root directory containing subfolders with .sql files.
