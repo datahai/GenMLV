@@ -1,3 +1,4 @@
+
 import os
 import json
 from datetime import datetime
@@ -37,18 +38,18 @@ def collect_sql_files(sql_root_path):
                     }
     return sql_files, required_schemas
 
-def ensure_schemas_exist(required_schemas):
+def ensure_schemas_exist(required_schemas, dry_run=False):
     existing_schemas = set(row.namespace.split('.')[-1] for row in spark.sql("SHOW SCHEMAS").collect())
     for schema in required_schemas - existing_schemas:
-        try:
-            print(f"Creating missing schema: {schema}")
-            spark.sql(f"CREATE SCHEMA IF NOT EXISTS {schema}")
-            print(f"✅ Schema '{schema}' created.")
-        except Exception as e:
-            print(f"❌ Failed to create schema '{schema}': {e}")
+        print(f"{'Would create' if dry_run else 'Creating'} missing schema: {schema}")
+        if not dry_run:
+            try:
+                spark.sql(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+                print(f"✅ Schema '{schema}' created.")
+            except Exception as e:
+                print(f"❌ Failed to create schema '{schema}': {e}")
 
-def drop_obsolete_mlvs(sql_files, mlv_metadata):
-    # Always get all schemas from the lakehouse
+def drop_obsolete_mlvs(sql_files, mlv_metadata, dry_run=False):
     all_schemas = set(row.namespace.split('.')[-1] for row in spark.sql("SHOW SCHEMAS").collect())
     existing_mlvs = set()
 
@@ -63,18 +64,18 @@ def drop_obsolete_mlvs(sql_files, mlv_metadata):
     mlvs_to_drop = existing_mlvs - set(sql_files.keys())
 
     for schema, mlv in mlvs_to_drop:
-        try:
-            print(f"Dropping obsolete MLV: {schema}.{mlv}")
-            spark.sql(f"DROP MATERIALIZED LAKE VIEW IF EXISTS {schema}.{mlv}")
-            print(f"✅ Dropped obsolete MLV: {schema}.{mlv}")
-            mlv_metadata.pop(f"{schema}.{mlv}", None)
-        except Exception as e:
-            print(f"❌ Failed to drop MLV '{schema}.{mlv}': {e}")
+        print(f"{'Would drop' if dry_run else 'Dropping'} obsolete MLV: {schema}.{mlv}")
+        if not dry_run:
+            try:
+                spark.sql(f"DROP MATERIALIZED LAKE VIEW IF EXISTS {schema}.{mlv}")
+                print(f"✅ Dropped obsolete MLV: {schema}.{mlv}")
+                mlv_metadata.pop(f"{schema}.{mlv}", None)
+            except Exception as e:
+                print(f"❌ Failed to drop MLV '{schema}.{mlv}': {e}")
 
     return existing_mlvs
 
-
-def create_or_update_mlvs(sql_files, existing_mlvs, mlv_metadata):
+def create_or_update_mlvs(sql_files, existing_mlvs, mlv_metadata, dry_run=False):
     for (schema, table_name), file_info in sql_files.items():
         file_path = file_info["path"]
         modified_datetime = datetime.strptime(file_info["datetime"], "%Y-%m-%d %H:%M:%S")
@@ -85,27 +86,27 @@ def create_or_update_mlvs(sql_files, existing_mlvs, mlv_metadata):
         if modified_datetime > last_processed_datetime:
             with open(file_path, 'r') as file:
                 select_statement = file.read().strip()
-            try:
-                if (schema, table_name) in existing_mlvs:
-                    print(f"Dropping existing MLV before recreation: {schema}.{table_name}")
-                    spark.sql(f"DROP MATERIALIZED LAKE VIEW IF EXISTS {schema}.{table_name}")
-                create_sql = f"CREATE MATERIALIZED LAKE VIEW {schema}.{table_name} {select_statement}"
-                print(f"Executing SQL to create MLV: {schema}.{table_name}")
-                spark.sql(create_sql)
-                print(f"✅ MLV '{schema}.{table_name}' created successfully.")
-                mlv_metadata[metadata_key] = {
-                    "timestamp": file_info["timestamp"],
-                    "datetime": file_info["datetime"]
-                }
-            except Exception as e:
-                print(f"❌ Failed to create MLV '{schema}.{table_name}': {e}")
+            print(f"{'Would recreate' if dry_run else 'Recreating'} MLV: {schema}.{table_name}")
+            if not dry_run:
+                try:
+                    if (schema, table_name) in existing_mlvs:
+                        spark.sql(f"DROP MATERIALIZED LAKE VIEW IF EXISTS {schema}.{table_name}")
+                    create_sql = f"CREATE MATERIALIZED LAKE VIEW {schema}.{table_name} {select_statement}"
+                    spark.sql(create_sql)
+                    print(f"✅ MLV '{schema}.{table_name}' created successfully.")
+                    mlv_metadata[metadata_key] = {
+                        "timestamp": file_info["timestamp"],
+                        "datetime": file_info["datetime"]
+                    }
+                except Exception as e:
+                    print(f"❌ Failed to create MLV '{schema}.{table_name}': {e}")
 
 def save_metadata(metadata_file_path, mlv_metadata):
     with open(metadata_file_path, 'w') as meta_file:
         json.dump(mlv_metadata, meta_file, indent=2)
 
 # === Main Execution ===
-def main():
+def main(dry_run=False):
     sql_root_path = "/lakehouse/default/Files/mlv"
     metadata_file_path = os.path.join(sql_root_path, "mlv_metadata.json")
 
@@ -113,12 +114,19 @@ def main():
 
     sql_files, required_schemas = collect_sql_files(sql_root_path)
 
-    ensure_schemas_exist(required_schemas)
+    ensure_schemas_exist(required_schemas, dry_run)
 
-    existing_mlvs = drop_obsolete_mlvs(sql_files, mlv_metadata)
+    existing_mlvs = drop_obsolete_mlvs(sql_files, mlv_metadata, dry_run)
 
-    create_or_update_mlvs(sql_files, existing_mlvs, mlv_metadata)
+    create_or_update_mlvs(sql_files, existing_mlvs, mlv_metadata, dry_run)
 
-    save_metadata(metadata_file_path, mlv_metadata)
+    if not dry_run:
+        save_metadata(metadata_file_path, mlv_metadata)
+    else:
+        print("📝 Dry run mode: Metadata not saved.")
 
-main()
+# Run with dry_run=True to preview actions
+main(dry_run=True)
+
+# Run for real
+# main()
