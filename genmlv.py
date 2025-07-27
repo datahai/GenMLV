@@ -20,22 +20,22 @@ def load_or_initialize_metadata(metadata_file_path):
 def collect_sql_files(sql_root_path):
     sql_files = {}
     required_schemas = set()
-    for subdir in sorted(os.listdir(sql_root_path)):
-        subdir_path = os.path.join(sql_root_path, subdir)
-        if os.path.isdir(subdir_path):
-            for f in sorted(os.listdir(subdir_path)):
-                if f.endswith(".sql"):
-                    full_path = os.path.join(subdir_path, f)
-                    modified_time = os.path.getmtime(full_path)
-                    modified_dt = datetime.fromtimestamp(modified_time)
-                    base_name = f[:-4]
-                    schema, table_name = base_name.split('.', 1) if '.' in base_name else ("default", base_name)
-                    required_schemas.add(schema)
-                    sql_files[(schema, table_name)] = {
-                        "path": full_path,
-                        "timestamp": modified_time,
-                        "datetime": modified_dt.strftime("%Y-%m-%d %H:%M:%S")
-                    }
+
+    for root, _, files in os.walk(sql_root_path):
+        for f in sorted(files):
+            if f.endswith(".sql"):
+                full_path = os.path.join(root, f)
+                modified_time = os.path.getmtime(full_path)
+                modified_dt = datetime.fromtimestamp(modified_time)
+                base_name = f[:-4]
+                schema, table_name = base_name.split('.', 1) if '.' in base_name else ("default", base_name)
+                required_schemas.add(schema)
+                sql_files[(schema, table_name)] = {
+                    "path": full_path,
+                    "timestamp": modified_time,
+                    "datetime": modified_dt.strftime("%Y-%m-%d %H:%M:%S")
+                }
+
     return sql_files, required_schemas
 
 def ensure_schemas_exist(required_schemas, dry_run=False):
