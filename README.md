@@ -7,6 +7,10 @@ Project to manage MLVs in Microsoft Fabric Lakehouse
 - Maintains a metadata file to track changes and avoid unnecessary recreation.
 
 ---
+## Usage Video
+There's a video here showing the usage of the GenMLV process: https://www.youtube.com/watch?v=Vanel4tge9o
+
+---
 
 🔧 1. Setup and Initialization
 
