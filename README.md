@@ -8,7 +8,7 @@ Project to manage MLVs in Microsoft Fabric Lakehouse
 
 ---
 ## Usage Video
-There's a video here showing the usage of the GenMLV process: [YouTube]([https://www.google.com](https://www.youtube.com/watch?v=Vanel4tge9o))
+There's a video here showing the usage of the GenMLV process: [YouTube](https://www.youtube.com/watch?v=Vanel4tge9o)
 
 ---
 
