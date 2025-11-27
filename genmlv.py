@@ -18,10 +18,14 @@ def load_or_initialize_metadata(metadata_file_path):
         return {}
 
 def collect_sql_files(sql_root_path):
-    sql_files = {}
+    sql_files = []
     required_schemas = set()
 
-    for root, _, files in os.walk(sql_root_path):
+    for root, dirs, files in os.walk(sql_root_path):
+        # Sort directories to ensure correct traversal order (numeric-aware)
+        dirs.sort(key=lambda d: int(d) if d.isdigit() else d)
+
+        # Sort files within each folder
         for f in sorted(files):
             if f.endswith(".sql"):
                 full_path = os.path.join(root, f)
@@ -30,11 +34,13 @@ def collect_sql_files(sql_root_path):
                 base_name = f[:-4]
                 schema, table_name = base_name.split('.', 1) if '.' in base_name else ("default", base_name)
                 required_schemas.add(schema)
-                sql_files[(schema, table_name)] = {
+                sql_files.append({
+                    "schema": schema,
+                    "table_name": table_name,
                     "path": full_path,
                     "timestamp": modified_time,
                     "datetime": modified_dt.strftime("%Y-%m-%d %H:%M:%S")
-                }
+                })
 
     return sql_files, required_schemas
 
@@ -61,7 +67,9 @@ def drop_obsolete_mlvs(sql_files, mlv_metadata, dry_run=False):
         except Exception as e:
             print(f"⚠️ Could not list MLVs in schema '{schema}': {e}")
 
-    mlvs_to_drop = existing_mlvs - set(sql_files.keys())
+    # Convert sql_files list to set of tuples for comparison
+    sql_file_keys = {(item['schema'], item['table_name']) for item in sql_files}
+    mlvs_to_drop = existing_mlvs - sql_file_keys
 
     for schema, mlv in mlvs_to_drop:
         print(f"{'Would drop' if dry_run else 'Dropping'} obsolete MLV: {schema}.{mlv}")
@@ -76,7 +84,9 @@ def drop_obsolete_mlvs(sql_files, mlv_metadata, dry_run=False):
     return existing_mlvs
 
 def create_or_update_mlvs(sql_files, existing_mlvs, mlv_metadata, dry_run=False):
-    for (schema, table_name), file_info in sql_files.items():
+    for file_info in sql_files:
+        schema = file_info["schema"]
+        table_name = file_info["table_name"]
         file_path = file_info["path"]
         modified_datetime = datetime.strptime(file_info["datetime"], "%Y-%m-%d %H:%M:%S")
         metadata_key = f"{schema}.{table_name}"
@@ -125,8 +135,6 @@ def main(dry_run=False):
     else:
         print("📝 Dry run mode: Metadata not saved.")
 
-# Run with dry_run=True to preview actions
-main(dry_run=True)
-
-# Run for real
-# main()
+##################################################################################################
+# Run
+main(dry_run=False)
