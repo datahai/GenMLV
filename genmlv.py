@@ -93,23 +93,28 @@ def create_or_update_mlvs(sql_files, existing_mlvs, mlv_metadata, dry_run=False)
         last_processed_str = mlv_metadata.get(metadata_key, {}).get("datetime", "1970-01-01 00:00:00")
         last_processed_datetime = datetime.strptime(last_processed_str, "%Y-%m-%d %H:%M:%S")
 
+        # Note: ensure '>' is a literal greater-than (avoid pasted HTML entities like &gt;)
         if modified_datetime > last_processed_datetime:
             with open(file_path, 'r') as file:
                 select_statement = file.read().strip()
-            print(f"{'Would recreate' if dry_run else 'Recreating'} MLV: {schema}.{table_name}")
+
+            print(f"{'Would create/replace' if dry_run else 'Creating or replacing'} MLV: {schema}.{table_name}")
             if not dry_run:
                 try:
-                    if (schema, table_name) in existing_mlvs:
-                        spark.sql(f"DROP MATERIALIZED LAKE VIEW IF EXISTS {schema}.{table_name}")
-                    create_sql = f"CREATE MATERIALIZED LAKE VIEW {schema}.{table_name} {select_statement}"
+                    # No DROP anymore; rely on CREATE OR REPLACE
+                    create_sql = (
+                        f"CREATE OR REPLACE MATERIALIZED LAKE VIEW "
+                        f"{schema}.{table_name} {select_statement}"
+                    )
                     spark.sql(create_sql)
-                    print(f"✅ MLV '{schema}.{table_name}' created successfully.")
+                    print(f"✅ MLV '{schema}.{table_name}' created or replaced successfully.")
+
                     mlv_metadata[metadata_key] = {
                         "timestamp": file_info["timestamp"],
                         "datetime": file_info["datetime"]
                     }
                 except Exception as e:
-                    print(f"❌ Failed to create MLV '{schema}.{table_name}': {e}")
+                    print(f"❌ Failed to create/replace MLV '{schema}.{table_name}': {e}")
 
 def save_metadata(metadata_file_path, mlv_metadata):
     with open(metadata_file_path, 'w') as meta_file:
