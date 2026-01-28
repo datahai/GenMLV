@@ -2,7 +2,7 @@
 Project to manage MLVs in Microsoft Fabric Lakehouse
 
 - Keeps your Fabric Lakehouse MVLs in sync with .sql files in a Lakehouse Files directory.
-- Automatically creates or updates Materialized Lake Views based on the .sql files.
+- Automatically creates or replaces Materialized Lake Views based on the .sql files.
 - Cleans up any MLVs that no longer have a corresponding .sql file.
 - Maintains a metadata file to track changes and avoid unnecessary recreation.
 
@@ -42,13 +42,12 @@ If it exists:
 - Drop each of these MLVs using DROP MATERIALIZED LAKE VIEW.
 - Remove their entries from the metadata.
   
-🔄 6. Create or Recreate MLVs
+🔄 6. Create or Replace MLVs
 - For each .sql file:
     - Compare its last modified time with the timestamp in the metadata.
     - If the file is newer:
         - Read the SQL SELECT statement from the file.
-        - Drop the existing MLV (if it exists).
-        - Create a new MLV using CREATE MATERIALIZED LAKE VIEW.
+        - Create a new MLV or Update an existing MLV using CREATE OR REPLACE MATERIALIZED LAKE VIEW.
         - Schemas will be created automatically based on file names
         - Update the metadata with the new timestamp.
         
