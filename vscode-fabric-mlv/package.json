@@ -2,7 +2,7 @@
   "name": "fabric-mlv-manager",
   "displayName": "Fabric MLV Manager",
   "description": "Validate, plan, and orchestrate Materialized Lake View deployments for Microsoft Fabric.",
-  "version": "0.0.4",
+  "version": "0.0.10",
   "publisher": "datahai",
   "license": "GPL-2.0-only",
   "repository": {
@@ -25,7 +25,8 @@
     "onCommand:fabricMlv.refreshExplorer",
     "onCommand:fabricMlv.previewApiProfile",
     "onCommand:fabricMlv.applyApiProfile",
-    "onView:fabricMlv.views"
+    "onView:fabricMlv.views",
+    "onView:fabricMlv.compactGraph"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -76,6 +77,11 @@
         {
           "id": "fabricMlv.views",
           "name": "Fabric MLV"
+        },
+        {
+          "id": "fabricMlv.compactGraph",
+          "name": "Fabric MLV Graph",
+          "type": "webview"
         }
       ]
     },
@@ -84,6 +90,11 @@
         {
           "command": "fabricMlv.refreshExplorer",
           "when": "view == fabricMlv.views",
+          "group": "navigation"
+        },
+        {
+          "command": "fabricMlv.refreshExplorer",
+          "when": "view == fabricMlv.compactGraph",
           "group": "navigation"
         }
       ]

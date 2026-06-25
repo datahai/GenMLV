@@ -39,6 +39,15 @@ const fs = __importStar(require("node:fs/promises"));
 const path = __importStar(require("node:path"));
 const vscode = __importStar(require("vscode"));
 const promises_1 = require("node:timers/promises");
+const SCHEMA_PALETTE = [
+    { fill: "#1e6fbe", stroke: "#0b3a66" },
+    { fill: "#9a6700", stroke: "#5a3900" },
+    { fill: "#2f9e44", stroke: "#1f6f30" },
+    { fill: "#0f766e", stroke: "#0b4f49" },
+    { fill: "#b42318", stroke: "#7a1a12" },
+    { fill: "#5f4b8b", stroke: "#3f325d" },
+    { fill: "#3f4b5b", stroke: "#2b343f" }
+];
 const API_PROFILES = [
     {
         id: "flat-default",
@@ -70,15 +79,18 @@ const API_PROFILES = [
 ];
 const output = vscode.window.createOutputChannel("Fabric MLV Manager");
 let mlvProvider;
+let compactGraphProvider;
 function activate(context) {
     output.appendLine("Fabric MLV Manager activated.");
     mlvProvider = new MlvTreeDataProvider();
+    compactGraphProvider = new CompactDependencyGraphViewProvider();
     const treeView = vscode.window.createTreeView("fabricMlv.views", {
         treeDataProvider: mlvProvider,
         showCollapseAll: true
     });
-    context.subscriptions.push(output, treeView, vscode.commands.registerCommand("fabricMlv.validateSqlDefinitions", validateSqlDefinitions), vscode.commands.registerCommand("fabricMlv.generateDeploymentPlan", generateDeploymentPlan), vscode.commands.registerCommand("fabricMlv.showDependencyGraph", showDependencyGraph), vscode.commands.registerCommand("fabricMlv.openDependencyGraph", showDependencyGraph), vscode.commands.registerCommand("fabricMlv.toggleDependencyGraphDirection", toggleDependencyGraphDirection), vscode.commands.registerCommand("fabricMlv.triggerNotebookRun", triggerNotebookRun), vscode.commands.registerCommand("fabricMlv.previewApiProfile", previewApiProfile), vscode.commands.registerCommand("fabricMlv.applyApiProfile", applyApiProfile), vscode.commands.registerCommand("fabricMlv.refreshExplorer", async () => {
+    context.subscriptions.push(output, treeView, vscode.window.registerWebviewViewProvider("fabricMlv.compactGraph", compactGraphProvider), vscode.commands.registerCommand("fabricMlv.validateSqlDefinitions", validateSqlDefinitions), vscode.commands.registerCommand("fabricMlv.generateDeploymentPlan", generateDeploymentPlan), vscode.commands.registerCommand("fabricMlv.showDependencyGraph", showDependencyGraph), vscode.commands.registerCommand("fabricMlv.openDependencyGraph", showDependencyGraph), vscode.commands.registerCommand("fabricMlv.toggleDependencyGraphDirection", toggleDependencyGraphDirection), vscode.commands.registerCommand("fabricMlv.triggerNotebookRun", triggerNotebookRun), vscode.commands.registerCommand("fabricMlv.previewApiProfile", previewApiProfile), vscode.commands.registerCommand("fabricMlv.applyApiProfile", applyApiProfile), vscode.commands.registerCommand("fabricMlv.refreshExplorer", async () => {
         await mlvProvider?.refresh();
+        await compactGraphProvider?.refresh();
     }), vscode.commands.registerCommand("fabricMlv.openSqlFile", async (item) => {
         if (!item || item.kind !== "definition" || !item.resourceUri) {
             return;
@@ -88,6 +100,7 @@ function activate(context) {
     }), vscode.workspace.onDidChangeConfiguration(async (event) => {
         if (event.affectsConfiguration("fabricMlv")) {
             await mlvProvider?.refresh();
+            await compactGraphProvider?.refresh();
         }
     }));
 }
@@ -250,18 +263,39 @@ async function generateDeploymentPlan() {
     vscode.window.showInformationMessage(`Plan ready: ${toCreateOrReplace.length} create/replace, ${obsoleteCandidates.length} obsolete.`);
 }
 async function showDependencyGraph() {
+    const config = vscode.workspace.getConfiguration("fabricMlv");
+    const direction = normalizeGraphDirection(config.get("dependencyGraphDirection", "LR"));
+    const graphData = await buildDependencyGraphData();
+    if (!graphData) {
+        return;
+    }
+    if (graphData.nodes.size === 0) {
+        vscode.window.showWarningMessage(`No SQL files found under ${graphData.sqlRoot}.`);
+        return;
+    }
+    const panel = vscode.window.createWebviewPanel("fabricMlvDependencyGraph", "Fabric MLV Dependency Graph", vscode.ViewColumn.Active, {
+        enableScripts: true
+    });
+    panel.webview.html = renderDependencyGraphSvgHtml(graphData.nodes, graphData.edges, graphData.sqlRoot, direction);
+}
+async function toggleDependencyGraphDirection() {
+    const config = vscode.workspace.getConfiguration("fabricMlv");
+    const current = normalizeGraphDirection(config.get("dependencyGraphDirection", "LR"));
+    const next = current === "LR" ? "TB" : "LR";
+    await config.update("dependencyGraphDirection", next, vscode.ConfigurationTarget.Workspace);
+    vscode.window.showInformationMessage(`Dependency graph direction set to ${next === "LR" ? "Left to Right" : "Top to Bottom"}.`);
+}
+async function buildDependencyGraphData() {
     const root = getWorkspaceRoot();
     if (!root) {
-        return;
+        return undefined;
     }
     const config = vscode.workspace.getConfiguration("fabricMlv");
     const sqlRoot = config.get("sqlRoot", "mlv");
-    const direction = normalizeGraphDirection(config.get("dependencyGraphDirection", "LR"));
     const sqlRootPath = path.join(root, sqlRoot);
     const definitions = await findSqlDefinitions(sqlRootPath, root);
     if (definitions.length === 0) {
-        vscode.window.showWarningMessage(`No SQL files found under ${sqlRoot}.`);
-        return;
+        return { sqlRoot, nodes: new Map(), edges: new Set() };
     }
     const mlvKeys = new Set(definitions.map((d) => d.key.toLowerCase()));
     const tableToMlvKey = new Map();
@@ -280,24 +314,35 @@ async function showDependencyGraph() {
                 continue;
             }
             const resolved = resolveReference(normalized, mlvKeys, tableToMlvKey);
+            if (!resolved && !normalized.includes(".")) {
+                continue;
+            }
             const target = resolved ?? normalized;
             const targetType = resolved ? "mlv" : "table";
             nodes.set(target, targetType);
-            // Model source -> dependent so upstream objects point to downstream MLVs.
             edges.add(`${target}-->${def.key}`);
         }
     }
-    const panel = vscode.window.createWebviewPanel("fabricMlvDependencyGraph", "Fabric MLV Dependency Graph", vscode.ViewColumn.Active, {
-        enableScripts: true
-    });
-    panel.webview.html = renderDependencyGraphSvgHtml(nodes, edges, sqlRoot, direction);
+    return { sqlRoot, nodes, edges };
 }
-async function toggleDependencyGraphDirection() {
-    const config = vscode.workspace.getConfiguration("fabricMlv");
-    const current = normalizeGraphDirection(config.get("dependencyGraphDirection", "LR"));
-    const next = current === "LR" ? "TB" : "LR";
-    await config.update("dependencyGraphDirection", next, vscode.ConfigurationTarget.Workspace);
-    vscode.window.showInformationMessage(`Dependency graph direction set to ${next === "LR" ? "Left to Right" : "Top to Bottom"}.`);
+class CompactDependencyGraphViewProvider {
+    view;
+    async resolveWebviewView(webviewView) {
+        this.view = webviewView;
+        webviewView.webview.options = { enableScripts: false };
+        await this.refresh();
+    }
+    async refresh() {
+        if (!this.view) {
+            return;
+        }
+        const graphData = await buildDependencyGraphData();
+        if (!graphData) {
+            this.view.webview.html = renderCompactDependencyGraphHtml("mlv", new Map(), new Set());
+            return;
+        }
+        this.view.webview.html = renderCompactDependencyGraphHtml(graphData.sqlRoot, graphData.nodes, graphData.edges);
+    }
 }
 async function triggerNotebookRun() {
     const config = vscode.workspace.getConfiguration("fabricMlv");
@@ -450,14 +495,50 @@ function normalizeStates(values) {
     return new Set(values.map((v) => v.trim().toLowerCase()).filter(Boolean));
 }
 function extractSqlReferences(sql) {
+    const dependencySection = getDependencySearchSection(sql);
+    const sanitized = stripSqlNoise(dependencySection);
+    const cteAliases = extractCteAliases(sanitized);
     const refs = [];
-    const regex = /\b(?:from|join)\s+([a-zA-Z_][\w$]*(?:\.[a-zA-Z_][\w$]*)?)/gi;
-    let match = regex.exec(sql);
+    const regex = /\b(?:from|join)\s+([a-zA-Z_][\w$]*(?:\.[a-zA-Z_][\w$]*)*)/gi;
+    let match = regex.exec(sanitized);
     while (match) {
-        refs.push(match[1]);
-        match = regex.exec(sql);
+        const candidate = match[1];
+        if (!cteAliases.has(candidate.toLowerCase())) {
+            refs.push(candidate);
+        }
+        match = regex.exec(sanitized);
     }
     return refs;
+}
+function getDependencySearchSection(sql) {
+    // Most MLV files have options (COMMENT/TBLPROPERTIES/...) followed by AS SELECT.
+    // Restricting search to text after AS avoids false positives from prose in options.
+    const asMatch = /\bAS\b/i.exec(sql);
+    if (!asMatch || typeof asMatch.index !== "number") {
+        return sql;
+    }
+    return sql.slice(asMatch.index + asMatch[0].length);
+}
+function stripSqlNoise(sql) {
+    let cleaned = sql;
+    // Remove block comments.
+    cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, " ");
+    // Remove line comments.
+    cleaned = cleaned.replace(/--.*$/gm, " ");
+    // Remove quoted literals to prevent matching FROM/JOIN words inside strings.
+    cleaned = cleaned.replace(/'(?:''|[^'])*'/g, " ");
+    cleaned = cleaned.replace(/"(?:""|[^"])*"/g, " ");
+    return cleaned;
+}
+function extractCteAliases(sql) {
+    const aliases = new Set();
+    const cteRegex = /(?:\bwith\b|,)\s*([a-zA-Z_][\w$]*)\s+as\s*\(/gi;
+    let match = cteRegex.exec(sql);
+    while (match) {
+        aliases.add(match[1].toLowerCase());
+        match = cteRegex.exec(sql);
+    }
+    return aliases;
 }
 function normalizeReference(raw) {
     const trimmed = raw.trim();
@@ -535,8 +616,25 @@ async function orderDefinitionsByDependency(definitions) {
 function normalizeGraphDirection(input) {
     return input.toUpperCase() === "TB" ? "TB" : "LR";
 }
+function getNodeSchema(name) {
+    const trimmed = name.trim();
+    const dot = trimmed.indexOf(".");
+    if (dot <= 0) {
+        return "unknown";
+    }
+    return trimmed.slice(0, dot).toLowerCase();
+}
+function buildSchemaColorMap(nodeNames) {
+    const schemas = [...new Set(nodeNames.map((name) => getNodeSchema(name)))].sort((a, b) => a.localeCompare(b));
+    const colors = new Map();
+    for (let i = 0; i < schemas.length; i += 1) {
+        colors.set(schemas[i], SCHEMA_PALETTE[i % SCHEMA_PALETTE.length]);
+    }
+    return colors;
+}
 function renderDependencyGraphSvgHtml(nodes, edges, sqlRoot, direction) {
     const sortedNodeNames = [...nodes.keys()].sort((a, b) => a.localeCompare(b));
+    const schemaColors = buildSchemaColorMap(sortedNodeNames);
     const adjacency = new Map();
     const indegree = new Map();
     for (const name of sortedNodeNames) {
@@ -648,14 +746,19 @@ function renderDependencyGraphSvgHtml(nodes, edges, sqlRoot, direction) {
         if (!pos) {
             continue;
         }
-        const fill = nodeType === "mlv" ? "#1e6fbe" : "#2f9e44";
-        const stroke = nodeType === "mlv" ? "#0b3a66" : "#1f6f30";
+        const schema = getNodeSchema(name);
+        const schemaColor = schemaColors.get(schema) ?? SCHEMA_PALETTE[0];
+        const fill = schemaColor.fill;
+        const stroke = schemaColor.stroke;
         const radius = nodeType === "mlv" ? 6 : 18;
         nodeFragments.push(`<rect x="${pos.x}" y="${pos.y}" width="${nodeWidth}" height="${nodeHeight}" rx="${radius}" ry="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1.2"/>`);
         nodeFragments.push(`<text x="${pos.x + 12}" y="${pos.y + 24}" fill="#ffffff" font-size="13" font-family="var(--vscode-font-family)">${escapeXml(name)}</text>`);
     }
     const escapedSqlRoot = escapeXml(sqlRoot);
     const orientationLabel = direction === "LR" ? "Left to Right" : "Top to Bottom";
+    const schemaLegend = [...schemaColors.entries()]
+        .map(([schema, color]) => `<span class="schema-chip" style="background:${escapeXml(color.fill)};border-color:${escapeXml(color.stroke)}"></span>${escapeXml(schema)}`)
+        .join(" | ");
     return `<!doctype html>
 <html lang="en">
 <head>
@@ -684,6 +787,26 @@ function renderDependencyGraphSvgHtml(nodes, edges, sqlRoot, direction) {
       margin-bottom: 16px;
     }
 
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .toolbar button {
+      border: 1px solid var(--vscode-button-border, transparent);
+      background: var(--vscode-button-background);
+      color: var(--vscode-button-foreground);
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .toolbar button:hover {
+      background: var(--vscode-button-hoverBackground);
+    }
+
     .graph-wrap {
       overflow: auto;
       border: 1px solid var(--vscode-panel-border);
@@ -696,6 +819,17 @@ function renderDependencyGraphSvgHtml(nodes, edges, sqlRoot, direction) {
       margin-top: 12px;
       color: var(--vscode-descriptionForeground);
       font-size: 0.9rem;
+      line-height: 1.6;
+    }
+
+    .schema-chip {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      border: 1px solid;
+      margin-right: 4px;
+      vertical-align: middle;
     }
 
     .chip {
@@ -720,8 +854,13 @@ function renderDependencyGraphSvgHtml(nodes, edges, sqlRoot, direction) {
 <body>
   <h1>Fabric MLV Dependency Graph</h1>
   <div class="meta">SQL root: ${escapedSqlRoot} | Direction: ${orientationLabel}</div>
+  <div class="toolbar">
+    <button id="zoomIn" type="button" title="Zoom in">Zoom In</button>
+    <button id="zoomOut" type="button" title="Zoom out">Zoom Out</button>
+    <button id="fit" type="button" title="Fit graph to window">Fit to Window</button>
+  </div>
   <div class="graph-wrap">
-    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fabric MLV dependency graph">
+    <svg id="graphSvg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fabric MLV dependency graph">
       <defs>
         <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
           <path d="M0,0 L0,6 L6,3 z" fill="#7f8c9a" />
@@ -731,7 +870,230 @@ function renderDependencyGraphSvgHtml(nodes, edges, sqlRoot, direction) {
       ${nodeFragments.join("\n      ")}
     </svg>
   </div>
-  <div class="legend"><span class="chip mlv"></span>Rectangle = MLV defined in SQL folder, <span class="chip table"></span>Rounded = external table or unresolved reference. Arrows point source to dependent.</div>
+  <div class="legend"><span class="chip mlv"></span>Rectangle = MLV defined in SQL folder, <span class="chip table"></span>Rounded = external table or unresolved reference. Arrows point source to dependent.<br/>Color by schema: ${schemaLegend}</div>
+  <script>
+    (() => {
+      const svg = document.getElementById("graphSvg");
+      const zoomInButton = document.getElementById("zoomIn");
+      const zoomOutButton = document.getElementById("zoomOut");
+      const fitButton = document.getElementById("fit");
+
+      if (!(svg instanceof SVGElement)) {
+        return;
+      }
+
+      const base = { x: 0, y: 0, w: ${width}, h: ${height} };
+      const minScale = 0.2;
+      const maxScale = 5;
+      let state = { ...base };
+
+      const applyViewBox = () => {
+        svg.setAttribute("viewBox", state.x + " " + state.y + " " + state.w + " " + state.h);
+      };
+
+      const zoom = (factor) => {
+        const centerX = state.x + state.w / 2;
+        const centerY = state.y + state.h / 2;
+
+        const nextW = Math.max(base.w * minScale, Math.min(base.w * maxScale, state.w * factor));
+        const nextH = Math.max(base.h * minScale, Math.min(base.h * maxScale, state.h * factor));
+
+        state = {
+          x: centerX - nextW / 2,
+          y: centerY - nextH / 2,
+          w: nextW,
+          h: nextH
+        };
+
+        applyViewBox();
+      };
+
+      zoomInButton?.addEventListener("click", () => zoom(0.8));
+      zoomOutButton?.addEventListener("click", () => zoom(1.25));
+      fitButton?.addEventListener("click", () => {
+        state = { ...base };
+        applyViewBox();
+      });
+    })();
+  </script>
+</body>
+</html>`;
+}
+function renderCompactDependencyGraphHtml(sqlRoot, nodes, edges) {
+    const sortedNodeNames = [...nodes.keys()].sort((a, b) => a.localeCompare(b));
+    const schemaColors = buildSchemaColorMap(sortedNodeNames);
+    const adjacency = new Map();
+    const indegree = new Map();
+    for (const name of sortedNodeNames) {
+        adjacency.set(name, []);
+        indegree.set(name, 0);
+    }
+    for (const edge of edges) {
+        const [from, to] = edge.split("-->");
+        if (!from || !to || !adjacency.has(from) || !adjacency.has(to)) {
+            continue;
+        }
+        adjacency.get(from)?.push(to);
+        indegree.set(to, (indegree.get(to) ?? 0) + 1);
+    }
+    for (const [name, list] of adjacency.entries()) {
+        list.sort((a, b) => a.localeCompare(b));
+        adjacency.set(name, list);
+    }
+    const queue = sortedNodeNames.filter((name) => (indegree.get(name) ?? 0) === 0);
+    const levelByNode = new Map();
+    for (const name of sortedNodeNames) {
+        levelByNode.set(name, 0);
+    }
+    while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) {
+            continue;
+        }
+        const currentLevel = levelByNode.get(current) ?? 0;
+        const nextNodes = adjacency.get(current) ?? [];
+        for (const next of nextNodes) {
+            levelByNode.set(next, Math.max(levelByNode.get(next) ?? 0, currentLevel + 1));
+            indegree.set(next, (indegree.get(next) ?? 0) - 1);
+            if ((indegree.get(next) ?? 0) === 0) {
+                queue.push(next);
+            }
+        }
+    }
+    const levels = new Map();
+    let maxLevel = 0;
+    for (const name of sortedNodeNames) {
+        const level = levelByNode.get(name) ?? 0;
+        maxLevel = Math.max(maxLevel, level);
+        const list = levels.get(level) ?? [];
+        list.push(name);
+        levels.set(level, list);
+    }
+    for (const [level, list] of levels.entries()) {
+        list.sort((a, b) => a.localeCompare(b));
+        levels.set(level, list);
+    }
+    const margin = 12;
+    const maxLaneSize = Math.max(1, ...[...levels.values()].map((v) => v.length));
+    const width = Math.max(360, margin * 2 + (maxLevel + 1) * 64);
+    const height = Math.max(220, margin * 2 + maxLaneSize * 22);
+    const usableWidth = Math.max(1, width - margin * 2);
+    const usableHeight = Math.max(1, height - margin * 2);
+    const xStep = maxLevel > 0 ? usableWidth / maxLevel : 0;
+    const positions = new Map();
+    for (let level = 0; level <= maxLevel; level += 1) {
+        const list = levels.get(level) ?? [];
+        const laneCount = list.length;
+        for (let i = 0; i < list.length; i += 1) {
+            const name = list[i];
+            const y = laneCount <= 1 ? margin + usableHeight / 2 : margin + ((i + 1) * usableHeight) / (laneCount + 1);
+            positions.set(name, {
+                x: margin + level * xStep,
+                y
+            });
+        }
+    }
+    const edgeSvg = [];
+    for (const edge of [...edges].sort((a, b) => a.localeCompare(b))) {
+        const [from, to] = edge.split("-->");
+        if (!from || !to) {
+            continue;
+        }
+        const p1 = positions.get(from);
+        const p2 = positions.get(to);
+        if (!p1 || !p2) {
+            continue;
+        }
+        edgeSvg.push(`<line x1="${p1.x.toFixed(2)}" y1="${p1.y.toFixed(2)}" x2="${p2.x.toFixed(2)}" y2="${p2.y.toFixed(2)}" stroke="var(--vscode-descriptionForeground)" stroke-opacity="0.45" stroke-width="1" />`);
+    }
+    const escapeXml = (value) => value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    const nodeSvg = [];
+    for (const name of sortedNodeNames) {
+        const p = positions.get(name);
+        if (!p) {
+            continue;
+        }
+        const kind = nodes.get(name) ?? "table";
+        const schema = getNodeSchema(name);
+        const schemaColor = schemaColors.get(schema) ?? SCHEMA_PALETTE[0];
+        const radius = kind === "mlv" ? 5 : 4;
+        const fill = schemaColor.fill;
+        const stroke = schemaColor.stroke;
+        nodeSvg.push(`<circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="1"><title>${escapeXml(name)}</title></circle>`);
+    }
+    const escapedSqlRoot = escapeXml(sqlRoot);
+    const schemaLegend = [...schemaColors.entries()]
+        .map(([schema, color]) => `<span class="schema-chip" style="background:${escapeXml(color.fill)};border-color:${escapeXml(color.stroke)}"></span>${escapeXml(schema)}`)
+        .join(" | ");
+    return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      margin: 0;
+      padding: 8px;
+      color: var(--vscode-foreground);
+      background: var(--vscode-editor-background);
+      font-family: var(--vscode-font-family);
+    }
+
+    .meta {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .graph-wrap {
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px;
+      padding: 4px;
+      overflow: auto;
+    }
+
+    svg {
+      width: 100%;
+      height: auto;
+      display: block;
+      min-height: 200px;
+    }
+
+    .legend {
+      margin-top: 6px;
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      line-height: 1.6;
+    }
+
+    .schema-chip {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
+      border: 1px solid;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+  </style>
+</head>
+<body>
+  <div class="meta">Compact dependency map | SQL root: ${escapedSqlRoot}</div>
+  <div class="graph-wrap">
+    <svg viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Compact Fabric MLV dependency graph">
+      ${edgeSvg.join("\n      ")}
+      ${nodeSvg.join("\n      ")}
+    </svg>
+  </div>
+  <div class="legend">Hover a node to see full object name. Shape indicates kind (larger = MLV, smaller = external).<br/>Color by schema: ${schemaLegend}</div>
 </body>
 </html>`;
 }

@@ -47,9 +47,35 @@ def collect_sql_files(sql_root_path):
     return sql_files, required_schemas
 
 def extract_sql_references(sql_text):
+    search_text = get_dependency_search_section(sql_text)
+    sanitized = strip_sql_noise(search_text)
+    cte_aliases = extract_cte_aliases(sanitized)
     # Capture references after FROM/JOIN with optional schema qualifier.
     regex = re.compile(r"\b(?:from|join)\s+([a-zA-Z_][\w$]*(?:\.[a-zA-Z_][\w$]*)?)", re.IGNORECASE)
-    return regex.findall(sql_text)
+    refs = []
+    for ref in regex.findall(sanitized):
+        if ref.lower() not in cte_aliases:
+            refs.append(ref)
+    return refs
+
+def get_dependency_search_section(sql_text):
+    # MLV files usually have options followed by AS SELECT. Search dependencies
+    # in the SQL body to avoid false positives from COMMENT/TBLPROPERTIES text.
+    match = re.search(r"\bAS\b", sql_text, flags=re.IGNORECASE)
+    if not match:
+        return sql_text
+    return sql_text[match.end():]
+
+def strip_sql_noise(sql_text):
+    cleaned = re.sub(r"/\*[\s\S]*?\*/", " ", sql_text)
+    cleaned = re.sub(r"--.*$", " ", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"'(?:''|[^'])*'", " ", cleaned)
+    cleaned = re.sub(r'"(?:""|[^"])*"', " ", cleaned)
+    return cleaned
+
+def extract_cte_aliases(sql_text):
+    cte_regex = re.compile(r"(?:\bwith\b|,)\s*([a-zA-Z_][\w$]*)\s+as\s*\(", re.IGNORECASE)
+    return {match.lower() for match in cte_regex.findall(sql_text)}
 
 def normalize_reference(raw_ref):
     cleaned = raw_ref.strip().replace('`', '').replace('[', '').replace(']', '').replace('"', '')

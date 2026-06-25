@@ -39,5 +39,48 @@ FROM Product
 
 - You can now run the Notebook cell with the genmlv logic in.
 
+## Ecommerce Bronze -> Silver -> Gold Example
+
+This repo includes an expanded ecommerce example showing an end-to-end transformation pattern:
+
+- Bronze (raw): operational ingestion tables in `bronze.*`
+- Silver: cleaned and conformed entity views in `silver.*`
+- Gold: dimensional model for analytics in `gold.*`
+
+### Expected Bronze Tables
+
+The provided SQL samples reference:
+
+- `bronze.raw_customers`
+- `bronze.raw_products`
+- `bronze.raw_orders`
+- `bronze.raw_order_items`
+- `bronze.raw_payments`
+- `bronze.raw_shipments`
+
+### Silver Files (`mlv/01`)
+
+- `silver.mlv_customer.sql`
+- `silver.mlv_product.sql`
+- `silver.mlv_order.sql`
+- `silver.mlv_order_item.sql`
+- `silver.mlv_payment.sql`
+- `silver.mlv_shipment.sql`
+
+### Gold Files (`mlv/02`)
+
+- `gold.dim_customer.sql`
+- `gold.dim_product.sql`
+- `gold.dim_date.sql`
+- `gold.fact_order_line.sql`
+- `gold.fact_order.sql`
+- `gold.fact_daily_sales.sql`
+
+### Notes
+
+- Keep SQL as a `SELECT` statement (plus optional MLV options). GenMLV handles `CREATE OR REPLACE MATERIALIZED LAKE VIEW`.
+- You can store files in any subfolder under `mlv`; deployment order is resolved from dependencies.
+- This pattern provides a practical baseline for ecommerce analytics such as revenue, AOV, fulfillment timing, payment success rate, and customer behavior.
+
 
 

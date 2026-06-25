@@ -54,3 +54,56 @@ If it exists:
         
 💾 7. Save Updated Metadata
 - Write the updated metadata dictionary back to the JSON file.
+
+---
+## Expanded Ecommerce Example (Bronze -> Silver -> Gold)
+
+The repository now includes a full ecommerce example under `mlv/` that demonstrates:
+
+- Raw ingestion tables in `bronze` (append-only operational data)
+- Conformed `silver` MLVs for cleaned and typed entities
+- Dimensional model `gold` MLVs (dimensions and facts)
+
+### Bronze Source Tables Used
+
+The SQL examples assume these raw tables exist:
+
+- `bronze.raw_customers`
+- `bronze.raw_products`
+- `bronze.raw_orders`
+- `bronze.raw_order_items`
+- `bronze.raw_payments`
+- `bronze.raw_shipments`
+
+### Silver MLVs
+
+Silver examples are in `mlv/01/`:
+
+- `silver.mlv_customer.sql`
+- `silver.mlv_product.sql`
+- `silver.mlv_order.sql`
+- `silver.mlv_order_item.sql`
+- `silver.mlv_payment.sql`
+- `silver.mlv_shipment.sql`
+
+These MLVs standardize datatypes, normalize text values, and expose reusable business fields like order status, payment status, shipping status, and lifecycle timestamps.
+
+### Gold Dimensional MLVs
+
+Gold examples are in `mlv/02/`:
+
+- `gold.dim_customer.sql`
+- `gold.dim_product.sql`
+- `gold.dim_date.sql`
+- `gold.fact_order_line.sql`
+- `gold.fact_order.sql`
+- `gold.fact_daily_sales.sql`
+
+These build a star-schema style semantic layer suitable for BI reporting:
+
+- Dimensions: customer, product, date
+- Facts: order-line level, order-level, and daily sales rollup
+
+### Dependency-Driven Deployment
+
+You can place the files in any folder structure under `mlv/`. GenMLV resolves dependencies from SQL references and deploys in the required order.
