@@ -4,7 +4,8 @@ To deploy and use GenMLV:
 - Create a Notebook and add the code in the genmlv.py file
 - Create a Lakehouse with schema enabled (preview only)
 - In the Lakehouse Files section, create a folder called mlv
-- In this mlv folder you can create sub-folders e.g. 01, 02, 03 etc.  This is because we can add .sql files to directories to run in sequence.  E.G any .sql files in 01 need to be run before files in 02 folder etc.  Unfortunately at this time MLVs don't have any "ref" like functionality (Dbt etc)
+- SQL files can live in any sub-folder under mlv. Deployment order is inferred from SQL dependencies (FROM/JOIN references), not folder names.
+- If a cycle is detected between MLV definitions, the remaining items are processed alphabetically and a warning is printed.
 
 To write the SQL transformations:
 - Create a file with the schema and name of the MLV you want to create e.g. "silver.mlv_product"
@@ -32,7 +33,7 @@ SELECT
 FROM Product
 ```
 
-- Upload the .sql file to the mvl/01 directory
+- Upload the .sql file anywhere under the mlv directory (for example mlv/silver/ or mlv/transforms/)
 <img width="648" height="352" alt="image" src="https://github.com/user-attachments/assets/1ee1f92a-066e-420d-bf52-5eb882dbf893" />
 
 

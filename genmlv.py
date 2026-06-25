@@ -1,6 +1,8 @@
 
 import os
 import json
+import re
+from collections import deque
 from datetime import datetime
 
 def load_or_initialize_metadata(metadata_file_path):
@@ -44,6 +46,70 @@ def collect_sql_files(sql_root_path):
 
     return sql_files, required_schemas
 
+def extract_sql_references(sql_text):
+    # Capture references after FROM/JOIN with optional schema qualifier.
+    regex = re.compile(r"\b(?:from|join)\s+([a-zA-Z_][\w$]*(?:\.[a-zA-Z_][\w$]*)?)", re.IGNORECASE)
+    return regex.findall(sql_text)
+
+def normalize_reference(raw_ref):
+    cleaned = raw_ref.strip().replace('`', '').replace('[', '').replace(']', '').replace('"', '')
+    if not cleaned or cleaned.startswith('('):
+        return None
+    return cleaned
+
+def resolve_reference(reference, all_keys_lower, table_to_key):
+    lowered = reference.lower()
+    if '.' in reference:
+        return reference if lowered in all_keys_lower else None
+    return table_to_key.get(lowered)
+
+def order_sql_files_by_dependency(sql_files):
+    by_key = {f"{item['schema']}.{item['table_name']}": item for item in sql_files}
+    all_keys = sorted(by_key.keys())
+    all_keys_lower = {key.lower() for key in all_keys}
+    table_to_key = {item['table_name'].lower(): f"{item['schema']}.{item['table_name']}" for item in sql_files}
+
+    outgoing = {key: set() for key in all_keys}
+    indegree = {key: 0 for key in all_keys}
+
+    for key in all_keys:
+        file_info = by_key[key]
+        with open(file_info['path'], 'r') as sql_file:
+            sql_text = sql_file.read()
+
+        for raw_ref in extract_sql_references(sql_text):
+            normalized = normalize_reference(raw_ref)
+            if not normalized:
+                continue
+
+            dependency_key = resolve_reference(normalized, all_keys_lower, table_to_key)
+            if not dependency_key or dependency_key == key:
+                continue
+
+            if key not in outgoing[dependency_key]:
+                outgoing[dependency_key].add(key)
+                indegree[key] += 1
+
+    ready = deque(sorted([key for key in all_keys if indegree[key] == 0]))
+    ordered_keys = []
+
+    while ready:
+        current = ready.popleft()
+        ordered_keys.append(current)
+
+        for dependent in sorted(outgoing[current]):
+            indegree[dependent] -= 1
+            if indegree[dependent] == 0:
+                ready.append(dependent)
+
+    if len(ordered_keys) != len(all_keys):
+        remaining = sorted([key for key in all_keys if key not in set(ordered_keys)])
+        print("⚠️ Detected dependency cycle or unresolved ordering among:", ", ".join(remaining))
+        print("⚠️ Falling back to alphabetical order for the remaining items.")
+        ordered_keys.extend(remaining)
+
+    return [by_key[key] for key in ordered_keys]
+
 def ensure_schemas_exist(required_schemas, dry_run=False):
     existing_schemas = set(row.namespace.split('.')[-1] for row in spark.sql("SHOW SCHEMAS").collect())
     for schema in required_schemas - existing_schemas:
@@ -84,7 +150,9 @@ def drop_obsolete_mlvs(sql_files, mlv_metadata, dry_run=False):
     return existing_mlvs
 
 def create_or_update_mlvs(sql_files, existing_mlvs, mlv_metadata, dry_run=False):
-    for file_info in sql_files:
+    ordered_sql_files = order_sql_files_by_dependency(sql_files)
+
+    for file_info in ordered_sql_files:
         schema = file_info["schema"]
         table_name = file_info["table_name"]
         file_path = file_info["path"]

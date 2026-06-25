@@ -1,0 +1,198 @@
+{
+  "name": "fabric-mlv-manager",
+  "displayName": "Fabric MLV Manager",
+  "description": "Validate, plan, and orchestrate Materialized Lake View deployments for Microsoft Fabric.",
+  "version": "0.0.4",
+  "publisher": "datahai",
+  "license": "GPL-2.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/datahai/GenMLV.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:fabricMlv.validateSqlDefinitions",
+    "onCommand:fabricMlv.generateDeploymentPlan",
+    "onCommand:fabricMlv.showDependencyGraph",
+    "onCommand:fabricMlv.openDependencyGraph",
+    "onCommand:fabricMlv.toggleDependencyGraphDirection",
+    "onCommand:fabricMlv.triggerNotebookRun",
+    "onCommand:fabricMlv.refreshExplorer",
+    "onCommand:fabricMlv.previewApiProfile",
+    "onCommand:fabricMlv.applyApiProfile",
+    "onView:fabricMlv.views"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "fabricMlv.validateSqlDefinitions",
+        "title": "Fabric MLV: Validate SQL Definitions"
+      },
+      {
+        "command": "fabricMlv.generateDeploymentPlan",
+        "title": "Fabric MLV: Generate Deployment Plan"
+      },
+      {
+        "command": "fabricMlv.showDependencyGraph",
+        "title": "Fabric MLV: Show Dependency Graph"
+      },
+      {
+        "command": "fabricMlv.openDependencyGraph",
+        "title": "Fabric MLV: Open Dependency Graph"
+      },
+      {
+        "command": "fabricMlv.toggleDependencyGraphDirection",
+        "title": "Fabric MLV: Toggle Dependency Graph Direction"
+      },
+      {
+        "command": "fabricMlv.triggerNotebookRun",
+        "title": "Fabric MLV: Trigger Fabric Deployment"
+      },
+      {
+        "command": "fabricMlv.refreshExplorer",
+        "title": "Fabric MLV: Refresh Explorer"
+      },
+      {
+        "command": "fabricMlv.openSqlFile",
+        "title": "Fabric MLV: Open SQL File"
+      },
+      {
+        "command": "fabricMlv.applyApiProfile",
+        "title": "Fabric MLV: Apply Fabric API Profile"
+      },
+      {
+        "command": "fabricMlv.previewApiProfile",
+        "title": "Fabric MLV: Preview Fabric API Profile"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "fabricMlv.views",
+          "name": "Fabric MLV"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "fabricMlv.refreshExplorer",
+          "when": "view == fabricMlv.views",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Fabric MLV Manager",
+      "properties": {
+        "fabricMlv.sqlRoot": {
+          "type": "string",
+          "default": "mlv",
+          "description": "Workspace-relative folder containing MLV SQL files."
+        },
+        "fabricMlv.metadataFile": {
+          "type": "string",
+          "default": "mlv_metadata.json",
+          "description": "Metadata JSON filename inside the SQL root folder."
+        },
+        "fabricMlv.requireSchemaPrefix": {
+          "type": "boolean",
+          "default": true,
+          "description": "Require SQL filenames to include schema prefix, such as silver.orders.sql."
+        },
+        "fabricMlv.enforceSqlBodyShape": {
+          "type": "boolean",
+          "default": true,
+          "description": "Validate SQL contains an AS SELECT body and does not include CREATE MATERIALIZED LAKE VIEW."
+        },
+        "fabricMlv.dependencyGraphDirection": {
+          "type": "string",
+          "enum": ["LR", "TB"],
+          "default": "LR",
+          "description": "Dependency graph orientation: LR for left-to-right, TB for top-to-bottom."
+        },
+        "fabricMlv.fabricApi.url": {
+          "type": "string",
+          "default": "",
+          "description": "Optional HTTP endpoint that triggers Fabric deployment pipeline or notebook."
+        },
+        "fabricMlv.fabricApi.method": {
+          "type": "string",
+          "enum": ["POST", "PUT"],
+          "default": "POST",
+          "description": "HTTP method used for deployment trigger requests."
+        },
+        "fabricMlv.fabricApi.authToken": {
+          "type": "string",
+          "default": "",
+          "description": "Optional bearer token for deployment trigger requests."
+        },
+        "fabricMlv.fabricApi.payloadJson": {
+          "type": "string",
+          "default": "{\"source\":\"vscode-fabric-mlv\"}",
+          "description": "Optional JSON payload sent to fabricApi.url."
+        },
+        "fabricMlv.fabricApi.statusUrlTemplate": {
+          "type": "string",
+          "default": "",
+          "description": "Optional status URL template with {runId}, for example https://api.example/runs/{runId}."
+        },
+        "fabricMlv.fabricApi.pollIntervalMs": {
+          "type": "number",
+          "default": 5000,
+          "minimum": 1000,
+          "description": "Polling interval in milliseconds when statusUrlTemplate is configured."
+        },
+        "fabricMlv.fabricApi.maxPollAttempts": {
+          "type": "number",
+          "default": 30,
+          "minimum": 1,
+          "description": "Maximum number of polling attempts for deployment status checks."
+        },
+        "fabricMlv.fabricApi.runIdFieldPath": {
+          "type": "string",
+          "default": "runId",
+          "description": "Dot path to run id in trigger response JSON, for example data.run.id."
+        },
+        "fabricMlv.fabricApi.statusFieldPath": {
+          "type": "string",
+          "default": "status",
+          "description": "Dot path to status in polling response JSON, for example data.state.lifecycle."
+        },
+        "fabricMlv.fabricApi.successStates": {
+          "type": "array",
+          "default": ["succeeded", "completed"],
+          "items": {
+            "type": "string"
+          },
+          "description": "Status values treated as successful terminal states."
+        },
+        "fabricMlv.fabricApi.failureStates": {
+          "type": "array",
+          "default": ["failed", "cancelled", "canceled"],
+          "items": {
+            "type": "string"
+          },
+          "description": "Status values treated as failed terminal states."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.2.2",
+    "@types/node": "^20.14.12",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.4"
+  }
+}

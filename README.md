@@ -32,6 +32,7 @@ If it exists:
     - Record its full path.
     - Get its last modified timestamp.
     - Store this info in a dictionary sql_files keyed by the table name (filename without .sql).
+- Build a dependency graph from SQL references (FROM/JOIN) so deployment runs in dependency order, regardless of folder placement.
 
 📋 4. Get Existing Materialized Lake Views (MLVs)
 - Use Spark SQL to list all existing MLVs.
